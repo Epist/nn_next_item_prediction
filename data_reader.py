@@ -14,6 +14,7 @@ Random number generator seeds will be represented explicitly and stored as a pro
 import numpy as np
 import json
 import timeit
+import scipy
 
 class data_reader(object):
 	def __init__(self, filename):
@@ -45,7 +46,8 @@ class data_reader(object):
 		user_probs = np.zeros(self.num_users)
 		num_eligable_ratings = 0
 		num_ineligeable_users = self.num_users - len(user_ids) #Number of users not even in this train/valid/test set
-		print("This set of data does not contain any items for ", num_ineligeable_users, " users.")
+		if num_ineligeable_users>0:
+			print("This set of data does not contain any items for ", num_ineligeable_users, " users.")
 		for i, user in enumerate(user_ids):
 			cur_user_count = len(data_dict[user]) - num_previous_items
 			if cur_user_count > 0:
@@ -60,7 +62,7 @@ class data_reader(object):
 		user_probs = user_probs/num_eligable_ratings
 
 		inelibable_rate = num_ineligeable_users/self.num_users
-		print(inelibable_rate, " of the users have no eligeable items in this train/val/test set of data.")
+		print("\n", inelibable_rate, " of the users have no eligable items in this train/val/test set of data.")
 
 		return [user_ids, user_probs]
 
@@ -70,7 +72,7 @@ class data_reader(object):
 		pass
 		#return inverted_dictionary
 
-	def data_gen(self, batch_size, train_valid_test, num_previous_items):
+	def data_gen(self, batch_size, train_valid_test, num_previous_items, use_sparse_representation=False):
 		# A generator for batches for the model.
 		# A datapoint has the format [ith_item_purchased, i-1th_item_purchased, ..., user, candidate next item 1, candidate next item 2]
 		# Where one of the candidate next items is the real next item that the user purchased and the other is an item drawn randomly from the set of all items \ the real next item
@@ -93,12 +95,20 @@ class data_reader(object):
 
 			batch_users = np.random.choice(user_ids, batch_size, p = user_probs)
 
-			left_item_vector = np.zeros([batch_size, self.num_items])
-			right_item_vector = np.zeros([batch_size, self.num_items])
-			prev_items_vectors = []
-			for i in range(num_previous_items):
-				prev_items_vectors.append(np.zeros([batch_size, self.num_items]))
-			user_vector = np.zeros([batch_size, self.num_users])
+			if use_sparse_representation:
+				left_item_info = ([],([],[])) #For Scipy COO matrix  (data, (i, j))
+				right_item_info = ([],([],[]))
+				prev_items_infos = []
+				for i in range(num_previous_items):
+					prev_items_infos.append(([],([],[])))
+				user_info = ([],([],[]))
+			else:
+				left_item_vector = np.zeros([batch_size, self.num_items])
+				right_item_vector = np.zeros([batch_size, self.num_items])
+				prev_items_vectors = []
+				for i in range(num_previous_items):
+					prev_items_vectors.append(np.zeros([batch_size, self.num_items]))
+				user_vector = np.zeros([batch_size, self.num_users])
 			targets = np.zeros([batch_size, 1])
 
 			for datapoint, user in enumerate(batch_users):
@@ -113,7 +123,12 @@ class data_reader(object):
 
 				for j in range(num_previous_items): #The order here is n-1th, n-2th, n-3th, etc.
 					cur_prev_item = int(user_item_list[next_item_index-j-1])
-					prev_items_vectors[j][datapoint, cur_prev_item] = 1
+					if use_sparse_representation:
+						prev_items_infos[j][0].append(1)
+						prev_items_infos[j][1][0].append(datapoint)
+						prev_items_infos[j][1][1].append(cur_prev_item)
+					else:
+						prev_items_vectors[j][datapoint, cur_prev_item] = 1
 
 				#Pick a random item for the contrast proportionally to the frequency of purchase (to speed up training since more frequent items are more difficult)
 				while True: #To make sure it is not the identical item...
@@ -122,25 +137,59 @@ class data_reader(object):
 					if distractor_item != next_item:
 						break
 
-				user_vector[datapoint, int(user)] = 1
+				if use_sparse_representation:
+					user_info[0].append(1)
+					user_info[1][0].append(datapoint)
+					user_info[1][1].append(int(user))
+				else:
+					user_vector[datapoint, int(user)] = 1
 
-				#Choose a random order of presentation for the first and last item
+				#Choose a random order of presentation for the target and distractor items
 				order = np.random.randint(2)
 				if order == 0:
-					left_item_vector[datapoint, next_item] = 1
-					right_item_vector[datapoint, distractor_item] = 1
+					if use_sparse_representation:
+						left_item_info[0].append(1)
+						left_item_info[1][0].append(datapoint)
+						left_item_info[1][1].append(next_item)
+						right_item_info[0].append(1)
+						right_item_info[1][0].append(datapoint)
+						right_item_info[1][1].append(distractor_item)
+					else:
+						left_item_vector[datapoint, next_item] = 1
+						right_item_vector[datapoint, distractor_item] = 1
 					targets[datapoint] = 1 #True next item is on the left
 				elif order == 1:
-					left_item_vector[datapoint, distractor_item] = 1
-					right_item_vector[datapoint, next_item] = 1
+					if use_sparse_representation:
+						left_item_info[0].append(1)
+						left_item_info[1][0].append(datapoint)
+						left_item_info[1][1].append(distractor_item)
+						right_item_info[0].append(1)
+						right_item_info[1][0].append(datapoint)
+						right_item_info[1][1].append(next_item)
+					else:
+						left_item_vector[datapoint, distractor_item] = 1
+						right_item_vector[datapoint, next_item] = 1
 					targets[datapoint] = -1 #True next item is on the right
 
+			if use_sparse_representation:
+				left_item_vector = scipy.sparse.coo_matrix(left_item_info, shape=(batch_size, self.num_items)) #coo_matrix((data, (i, j)), [shape=(M, N)])
+				right_item_vector = scipy.sparse.coo_matrix(right_item_info, shape=(batch_size, self.num_items))
+				prev_items_vectors = []
+				for i in range(num_previous_items):
+					prev_items_vectors.append(scipy.sparse.coo_matrix(prev_items_infos[i], shape=(batch_size, self.num_items)))
+				user_vector = scipy.sparse.coo_matrix(user_info, shape=(batch_size, self.num_users))
 
-			#Yield the model input-output data
-			input_list = prev_items_vectors
-			prev_items_vectors.extend([user_vector, left_item_vector, right_item_vector])
+				concatenated_inputs_left = scipy.sparse.hstack(prev_items_vectors + [left_item_vector]) #Perform the input concatenation manually
+				concatenated_inputs_right = scipy.sparse.hstack(prev_items_vectors + [right_item_vector])
 
-			yield [input_list, targets]
+				#Yield the model input-output data
+				yield [[concatenated_inputs_left, concatenated_inputs_right], targets]
+			else:
+				#Yield the model input-output data
+				input_list = prev_items_vectors
+				prev_items_vectors.extend([user_vector, left_item_vector, right_item_vector])
+
+				yield [input_list, targets]
 
 
 

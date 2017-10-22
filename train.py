@@ -31,7 +31,7 @@ max_epochs = 100
 batch_size = 32 
 patience = 5
 #val_split = [0.85, 0.05, 0.1]
-early_stopping_metric = "val_binary_crossentropy" # "val_loss" #"val_accurate_RMSE"
+early_stopping_metric = "val_mean_squared_error" # "val_loss" #"val_accurate_RMSE"
 train_epoch_length = 10000
 val_epoch_length   = 1000
 test_epoch_length  = 1000
@@ -45,10 +45,10 @@ numlayers = 2
 num_hidden_units = 128
 num_previous_items = 1
 model_save_path = "models/"
-model_loss = 'binary_crossentropy' # "mean_absolute_error" 'mean_squared_error'
-optimizer = 'adagrad' #Adagrad(lr=0.0025, epsilon=1e-08, decay=0.0) #'rmsprop' 'adam' 'adagrad'
+model_loss = 'mse' # "mean_absolute_error" 'mean_squared_error'
+optimizer = 'rmsprop' #Adagrad(lr=0.0025, epsilon=1e-08, decay=0.0) #'rmsprop' 'adam' 'adagrad'
 activation_type = 'tanh' #Try 'selu' or 'elu' or 'softplus' or 'sigmoid'
-use_sparse_representation = False #Doesn't currently work
+use_sparse_representation = True
 
 
 model_save_name = "next_item_prediction_"+str(batch_size)+"bs_"+str(numlayers)+"lay_"+str(num_hidden_units)+"hu_" + str(optimizer)
@@ -71,7 +71,7 @@ print("Loading data for " + dataset)
 siamese_data_reader = data_reader(data_path)
 
 
-model_handler = siamese_model(siamese_data_reader.num_users, siamese_data_reader.num_items, num_previous_items, numlayers, num_hidden_units, activation_type)
+model_handler = siamese_model(siamese_data_reader.num_users, siamese_data_reader.num_items, num_previous_items, numlayers, num_hidden_units, activation_type, use_sparse_representation = use_sparse_representation)
 m = model_handler.model
 
 
@@ -83,7 +83,7 @@ set_session(tf.Session(config=config))
 
 m.compile(optimizer=optimizer,
               loss=model_loss,
-              metrics=['mae', 'mse'])
+              metrics=['mae', 'mse', 'binary_crossentropy'])
 
 
 min_loss = None
@@ -93,8 +93,8 @@ for i in range(max_epochs):
 	print("Starting epoch ", i+1)
 
 	#Rebuild the generators for each epoch (the train-valid set assignments stay the same)
-	train_gen = siamese_data_reader.data_gen(batch_size, "train", num_previous_items)
-	valid_gen = siamese_data_reader.data_gen(batch_size, "valid", num_previous_items)
+	train_gen = siamese_data_reader.data_gen(batch_size, "train", num_previous_items, use_sparse_representation = use_sparse_representation)
+	valid_gen = siamese_data_reader.data_gen(batch_size, "valid", num_previous_items, use_sparse_representation = use_sparse_representation)
 
 	#Train model
 	#callbax = [keras.callbacks.ModelCheckpoint(model_save_path+model_save_name+"_epoch_"+str(i+1))] #Could also set save_weights_only=True
@@ -133,7 +133,7 @@ print("Testing model from epoch: ", test_epoch)
 
 
 print("\nEvaluating model with fixed split")
-test_gen = siamese_data_reader.data_gen(batch_size, "test", num_previous_items)
+test_gen = siamese_data_reader.data_gen(batch_size, "test", num_previous_items, use_sparse_representation = use_sparse_representation)
 test_results = best_m.evaluate_generator(test_gen, test_epoch_length)
 print("Test results with fixed split")
 #print(test_results)
