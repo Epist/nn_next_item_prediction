@@ -17,15 +17,15 @@ class siamese_model(object):
 		self.use_sparse_representation = True
 
 		if use_sparse_representation:
-			concatenated_inputs_left = Input(shape=(self.num_items*(1+num_previous_items),), sparse=use_sparse_representation)
-			concatenated_inputs_right = Input(shape=(self.num_items*(1+num_previous_items),), sparse=use_sparse_representation)
+			concatenated_inputs_left = Input(shape=(self.num_items*(1+num_previous_items),), sparse=True)
+			concatenated_inputs_right = Input(shape=(self.num_items*(1+num_previous_items),), sparse=True)
 		else:
 			past_item_input_list = []
 			for i in range(num_previous_items):
-				past_item_input_list.append(Input(shape=(self.num_items,), sparse=use_sparse_representation))
+				past_item_input_list.append(Input(shape=(self.num_items,)))
 
-			left_network_item_input = Input(shape=(self.num_items,), sparse=use_sparse_representation)
-			right_network_item_input = Input(shape=(self.num_items,), sparse=use_sparse_representation)
+			left_network_item_input = Input(shape=(self.num_items,))
+			right_network_item_input = Input(shape=(self.num_items,))
 
 			#Concatenate all of the past item inputs into a single tensor
 			if num_previous_items > 1:
@@ -33,7 +33,7 @@ class siamese_model(object):
 			else:
 				past_item_inputs = past_item_input_list[0]
 
-			user_input = Input(shape=(self.num_users,), sparse=use_sparse_representation)
+			user_input = Input(shape=(self.num_users,),)
 
 		#Create the shared network
 		shared_net = self.siamese_net_half(self.num_layers, self.num_units, self.activation_type, self.use_sparse_representation)
@@ -61,25 +61,6 @@ class siamese_model(object):
 			input_list.extend([user_input, left_network_item_input, right_network_item_input])
 			self.model = Model(inputs=input_list, outputs=output)
 
-	"""
-	def siamese_net_half(self, num_layers, num_units, activation_type):
-		#Returns a function that represents the network and can be called on a list of inputs
-		dense_layers = []
-		for i in range(num_layers):
-			dense_layers.append(Dense(num_units, activation=activation_type))
-		output_layer = Dense(1, activation="softmax")
-
-		def half_net(input_list):
-			layer = concatenate(input_list)
-
-			for dl in dense_layers:
-				layer = dl(layer)
-
-			output = output_layer(layer)
-
-			return output 
-		return half_net
-		"""
 
 	def save_weights(self, filename):
 		#weights = self.model.get_weights()
@@ -87,11 +68,6 @@ class siamese_model(object):
 
 	def load_weights(self, weights):
 		self.model.set_weights(weights)
-
-
-
-
-
 
 	class siamese_net_half():
 		#Returns a function that represents the network and can be called on a list of inputs

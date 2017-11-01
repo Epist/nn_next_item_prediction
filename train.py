@@ -36,10 +36,6 @@ train_epoch_length = 10000
 val_epoch_length   = 1000
 test_epoch_length  = 1000
 
-#l2_weight_regulatization = None #The parameter value for the l2 weight regularization. Use None for no regularization.
-#dropout_probability = None
-
-
 #Model parameters
 numlayers = 2
 num_hidden_units = 128
@@ -97,7 +93,6 @@ for i in range(max_epochs):
 	valid_gen = siamese_data_reader.data_gen(batch_size, "valid", num_previous_items, use_sparse_representation = use_sparse_representation)
 
 	#Train model
-	#callbax = [keras.callbacks.ModelCheckpoint(model_save_path+model_save_name+"_epoch_"+str(i+1))] #Could also set save_weights_only=True
 	history = m.fit_generator(train_gen, train_epoch_length, 
 		validation_data=valid_gen, validation_steps=val_epoch_length) #callbacks=callbax
 	
@@ -139,37 +134,3 @@ print("Test results with fixed split")
 #print(test_results)
 for i in range(len(test_results)):
 	print(m.metrics_names[i], " : ", test_results[i])
-
-"""
-print("Testing manually")
-test_gen_manual = data_reader.data_gen(batch_size, None, train_val_test = "test", shuffle=shuffle_data_every_epoch, auxilliary_mask_type = auxilliary_mask_type, aux_var_value = aux_var_value, return_target_count=True)
-
-predictions = []
-targets = []
-ratings_count = 0
-print("Predicting")
-for i in range(int(np.floor(data_reader.test_set_size/batch_size))):
-	current_data = test_gen_manual.next()
-	input_list = current_data[0]
-	current_targets = current_data[1]
-	cur_ratings_count = current_data[2]
-	targets.append(current_targets)
-	ratings_count += cur_ratings_count
-	current_preds = best_m.predict(input_list, batch_size=batch_size, verbose=0)
-	predictions.append(current_preds)
-
-print("Computing error")
-def compute_full_RMSE(predictions, targets, ratings_count):
-	sum_squared_error = 0
-	for i in range(len(predictions)):
-		cur_preds = predictions[i]
-		cur_tars = targets[i]
-		error_contribution = np.sum(np.square(np.subtract(cur_preds, cur_tars)))
-		sum_squared_error += error_contribution
-	MSE = sum_squared_error/ratings_count
-	RMSE = np.sqrt(MSE)
-	return RMSE
-
-RMSE = compute_full_RMSE(predictions, targets, ratings_count)
-print("Manual test RMSE is ", RMSE)
-"""

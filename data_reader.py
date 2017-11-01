@@ -5,7 +5,7 @@ Constructs an ordinal input vector and a one-hot target vector based on a pre-ra
 
 A next item is chosen at random and the previous N items are pulled from the dictionary and assigned their relative rankings with respect to the next item.
 
-Not sure yet how to handle cases where there are fewer than N previously purchased items. Either drop the cases or find a clean way to represent this.
+Not sure yet how I want to handle cases where there are fewer than N previously purchased items. Either drop the cases or find a clean way to represent this.
 
 Splits are handled either using online splitting or by loading a split-file that contains the row number assignments. 
 Random number generator seeds will be represented explicitly and stored as a property of the reader.

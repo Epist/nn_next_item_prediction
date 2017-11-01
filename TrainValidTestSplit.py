@@ -65,7 +65,6 @@ print("Joining, sorting, and ranking")
 user_item_dict = build_user_item_dict(raw_data, user_id_dict, item_id_dict)
 
 
-
 def split_by_userwise_percentage(user_item_dict, train_valid_test_split):
     train_percentage = train_valid_test_split[0]
     valid_percentage = train_valid_test_split[1]
